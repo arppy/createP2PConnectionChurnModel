@@ -100,8 +100,6 @@ with open(ORG_INPUT_FILE_PATH) as csvfile:
     if int(line[1]) > ORG_MAX_VALUE:
       ORG_MAX_VALUE = int(line[1])
 
-INFILE_PATH = "out50/"
-
 def categoryToOneHotEncodeVector(value, length) :
   oneHotVector = [0] * (length+1)
   if value >=0  :
@@ -134,10 +132,14 @@ def listToCsvStr(outList, delim=',') :
 
 oneHotEncodeDict = {}
 integerEncodeDict = {}
+traceEncodeDict = {}
+
+INFILE_PATH = "out50/"
 
 files = os.listdir(INFILE_PATH)
-fileCSV = open('1010rr1101rr10b.csv', "a+", encoding="utf-8")
-fileSVMLight = open('1010rr1101rr10b.svmlight', "a+", encoding="utf-8")
+fileCSV = open('1010rr1101rr10network100000.csv', "a+", encoding="utf-8")
+fileSVMLight = open('1010rr1101rr10network100000.svmlight', "a+", encoding="utf-8")
+fileTraceOut = open('trace_network100000.csv', "a+", encoding="utf-8")
 lineI=0
 for fileName in files:
   with open('' + INFILE_PATH + fileName) as csvfile:
@@ -149,6 +151,12 @@ for fileName in files:
       sampleListOneHot = []
       sampleListInteger = []
       key = str(wholeLine[0])
+      if key not in traceEncodeDict :
+        line = str(wholeLine[0]).split(";")
+        outStr = line[0];
+        for record in line[1:] :
+          outStr += ";" + record
+        fileTraceOut.write('' + outStr + '\n')
       if key not in oneHotEncodeDict :
         line = str(wholeLine[0]).split(";")
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[0]),HOUR_MAX_VALUE))
@@ -201,3 +209,7 @@ for fileName in files:
         startPoz += ORG_MAX_VALUE + 2
         integerEncodeDict[key] = listToCsvStr(sampleListInteger)
         fileSVMLight.write('' + integerEncodeDict[key] + '\n' )
+
+fileCSV.close()
+fileSVMLight.close()
+fileTraceOut.close()
