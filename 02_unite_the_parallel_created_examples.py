@@ -110,7 +110,7 @@ def categoryToIntegerEncodeVector(value, startPoz) :
   return startPoz+value+1
 
 def listToSvmlightStr(outList) :
-  outStr=''
+  outStr='0 '
   i=0
   for element in outList :
     if element != 0 :
@@ -134,12 +134,12 @@ oneHotEncodeDict = {}
 integerEncodeDict = {}
 traceEncodeDict = {}
 
-INFILE_PATH = "out50/"
+INFILE_PATH = "out100000/"
 
 files = os.listdir(INFILE_PATH)
-fileCSV = open('1010rr1101rr10network100000.csv', "a+", encoding="utf-8")
-fileSVMLight = open('1010rr1101rr10network100000.svmlight', "a+", encoding="utf-8")
-fileTraceOut = open('trace_network100000.csv', "a+", encoding="utf-8")
+fileCSV = open('1010rr1101rr10network100000x10000.csv', "w", encoding="utf-8")
+fileSVMLight = open('1010rr1101rr10network100000x100000.svmlight', "w", encoding="utf-8")
+fileTraceOut = open('trace_network100000x100000.csv', "w", encoding="utf-8")
 lineI=0
 for fileName in files:
   with open('' + INFILE_PATH + fileName) as csvfile:
@@ -156,7 +156,8 @@ for fileName in files:
         outStr = line[0];
         for record in line[1:] :
           outStr += ";" + record
-        fileTraceOut.write('' + outStr + '\n')
+        traceEncodeDict[key] = outStr
+        fileTraceOut.write('' + traceEncodeDict[key] + '\n')
       if key not in oneHotEncodeDict :
         line = str(wholeLine[0]).split(";")
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[0]),HOUR_MAX_VALUE))
@@ -177,7 +178,7 @@ for fileName in files:
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[15]),ORG_MAX_VALUE))
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[16]),ORG_MAX_VALUE))
         oneHotEncodeDict[key] = listToSvmlightStr(sampleListOneHot)
-        fileCSV.write('' + oneHotEncodeDict[key] + '\n')
+        fileSVMLight.write('' + oneHotEncodeDict[key] + '\n')
       if key not in integerEncodeDict :
         line = str(wholeLine[0]).split(";")
         startPoz = 0
@@ -208,7 +209,7 @@ for fileName in files:
         sampleListInteger.append(categoryToIntegerEncodeVector(int(line[16]),startPoz))
         startPoz += ORG_MAX_VALUE + 2
         integerEncodeDict[key] = listToCsvStr(sampleListInteger)
-        fileSVMLight.write('' + integerEncodeDict[key] + '\n' )
+        fileCSV.write('' + integerEncodeDict[key] + '\n' )
 
 fileCSV.close()
 fileSVMLight.close()
