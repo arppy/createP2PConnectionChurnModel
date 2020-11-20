@@ -2,7 +2,8 @@ import json
 import csv
 import sys
 import multiprocessing
-
+import shutil
+import os
 
 def get_day_time(timestamp) :
   day = timestamp / 1000 / 60 / 60 / 24
@@ -39,7 +40,7 @@ def make_feature_vector_for_users(userList,coreNumber) :
         else :
           sessionEndUser = get_day_time(int(trace[user][lineI + 1][0]))
         #for neighbor in range(0,100000) :
-        for neighborInt in dataNeighborhood[user] :
+        for neighborInt in range(0, 100000):
           neighbor = str(neighborInt)
           if neighbor == user :
             continue
@@ -110,11 +111,12 @@ def make_feature_vector_for_users(userList,coreNumber) :
 
 with open('../res/trace_assignment100.json') as json_file:
   traceAssignment = json.load(json_file)
-with open('../res/peersimNeighborhood100.json') as json_file:
-  dataNeighborhood = json.load(json_file)
 traceFilePath = '../res/trace/'
 
-OUTFILE_PATH = 'out100/'
+OUTFILE_PATH = 'outAll/'
+if os.path.isdir(OUTFILE_PATH):
+  shutil.rmtree(OUTFILE_PATH)
+os.mkdir(OUTFILE_PATH)
 
 if len(sys.argv) > 1 and sys.argv[1] and sys.argv[1] is not None and str.isnumeric(sys.argv[1]):
   NUMBER_OF_CORES = int(sys.argv[1])

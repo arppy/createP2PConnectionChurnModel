@@ -130,8 +130,6 @@ def listToCsvStr(outList, delim=',') :
     outStr = outStr + str(delim) + str(element)
   return outStr
 
-oneHotEncodeDict = {}
-integerEncodeDict = {}
 traceEncodeDict = {}
 
 INFILE_PATH = "out100000/"
@@ -158,7 +156,6 @@ for fileName in files:
           outStr += ";" + record
         traceEncodeDict[key] = outStr
         fileTraceOut.write('' + traceEncodeDict[key] + '\n')
-      if key not in oneHotEncodeDict :
         line = str(wholeLine[0]).split(";")
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[0]),HOUR_MAX_VALUE))
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[1]),ANDROID_MAX_VALUE))
@@ -177,9 +174,8 @@ for fileName in files:
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[14]),COUNTRY_MAX_VALUE))
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[15]),ORG_MAX_VALUE))
         sampleListOneHot.extend(categoryToOneHotEncodeVector(int(line[16]),ORG_MAX_VALUE))
-        oneHotEncodeDict[key] = listToSvmlightStr(sampleListOneHot)
-        fileSVMLight.write('' + oneHotEncodeDict[key] + '\n')
-      if key not in integerEncodeDict :
+        oneHotEncode = listToSvmlightStr(sampleListOneHot)
+        fileSVMLight.write('' + oneHotEncode + '\n')
         line = str(wholeLine[0]).split(";")
         startPoz = 0
         sampleListInteger.append(categoryToIntegerEncodeVector(int(line[0]),startPoz))
@@ -208,9 +204,8 @@ for fileName in files:
         sampleListInteger.append(categoryToIntegerEncodeVector(int(line[15]),startPoz))
         sampleListInteger.append(categoryToIntegerEncodeVector(int(line[16]),startPoz))
         startPoz += ORG_MAX_VALUE + 2
-        integerEncodeDict[key] = listToCsvStr(sampleListInteger)
-        fileCSV.write('' + integerEncodeDict[key] + '\n' )
-
+        integerEncode = listToCsvStr(sampleListInteger)
+        fileCSV.write('' + integerEncode + '\n' )
 fileCSV.close()
 fileSVMLight.close()
 fileTraceOut.close()
