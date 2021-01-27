@@ -5,6 +5,7 @@ import multiprocessing
 import os
 import shutil
 import random
+import operator
 
 NETWORK_SIZE = 100000
 EXPECTED_NUMBER_OF_CONNECTED_NEIGHBOR = 20
@@ -16,8 +17,6 @@ with open("trace_network100000xoutAll.csv") as f1, open("trace_network100000xout
 
 with open('../res/trace_assignment100.json') as json_file:
   traceAssignment = json.load(json_file)
-with open('../res/peersimNeighborhood100.json') as json_file:
-  dataNeighborhood = json.load(json_file)
 
 ERRFILE_PATH = 'error/'
 if os.path.isdir(ERRFILE_PATH):
@@ -34,6 +33,49 @@ if len(sys.argv) > 1 and sys.argv[1] and sys.argv[1] is not None and str.isnumer
 else :
   NUMBER_OF_CORES = 50
 
+class Session :
+  def __init__(self, traceRecord, nextSessionStart, nextSessionType):
+    self.traceRecord = traceRecord
+    self.sessionStart = self.__get_day_time(int(traceRecord[0]))
+    if int(nextSessionType) == -1:
+      self.sessionEnd = 1000 * 60 * 60 * 24
+    else:
+      self.sessionEnd = self.__get_day_time(int(nextSessionStart))
+
+  def __get_day_time(timestamp):
+    day = timestamp / 1000 / 60 / 60 / 24
+    return round((day - int(day)) * 1000 * 60 * 60 * 24)
+
+'''
+  def time_to_online_intersection_at_time(self, examinedTime):
+    if int(self.traceRecord[1]) == 1  and self.start <= examinedTime < self.end :
+      return self.end
+    elif int(self.traceRecord[1]) == 1  and examinedTime < self.start :
+      return 0
+    else:
+      return -1
+
+  def time_to_online_intersection_with(self, neighborSession):
+    if int(neighborSession.traceRecord[1]) == 1 and int(self.traceRecord[1]) == 1 :
+      if self.sessionEnd <= neighborSession.sessionEnd :
+        if (self.sessionStart <= neighborSession.sessionStart < self.sessionEnd) or (self.sessionStart >= neighborSession.sessionStart) :
+          return self.sessionEnd
+        else :
+          -1
+      elif self.sessionEnd >= neighborSession.sessionEnd :
+        if (neighborSession.sessionStart <= self.sessionStart < neighborSession.sessionEnd) or (self.sessionStart <= neighborSession.sessionStart) :
+          return neighborSession.sessionEnd
+        else:
+          -1
+    else :
+      return -1
+    #(self.sessionStart <= sessionStartNeighbor < self.sessionEnd <= sessionEndNeighbor) or \
+    #(sessionStartNeighbor <= self.sessionStart < sessionEndNeighbor <= self.sessionEnd) or \
+    #(self.sessionStart <= sessionStartNeighbor and self.sessionEnd >= sessionEndNeighbor) or \
+    #(self.sessionStart >= sessionStartNeighbor and self.sessionEnd <= sessionEndNeighbor) :
+'''
+
+
 traceFilePath = '../res/trace/'
 trace = {}
 for user in traceAssignment :
@@ -42,14 +84,19 @@ for user in traceAssignment :
     trace[user] = {}
     lineI = 0
     for line in traceCSV :
-      trace[user][lineI] = []
+      traceRecord = []
+      recordI = 0
       for record in line :
-        trace[user][lineI].append(record)
+        traceRecord.append(record)
+        if recordI == 0 :
+          sessionStart = int(record)
+        if recordI == 1 :
+          nextSessionType = int(record)
+        recordI += 1
+      if lineI != 0 :
+        trace[user][lineI] = Session(prevTraceRecord,sessionStart,nextSessionType)
       lineI += 1
-
-def get_day_time(timestamp) :
-  day = timestamp / 1000 / 60 / 60 / 24
-  return round(( day - int(day) ) * 1000 * 60 * 60 * 24)
+      prevTraceRecord = traceRecord
 
 def get_day_time_hour(hour) :
   return hour * 1000 * 60 * 60
@@ -71,76 +118,115 @@ def make_feature_vector(initiator,receiver,initiatorUserName,receiverUserName,in
     #print("initiator",initiator,"receiver",receiver)
     return "-1"
 
+def create_print_string_for_churn(examinedTime,printingList) :
+  out_str = ""+str(examinedTime)
+  for printing in printingList :
+    out_str = out_str+ " " + str(printing)
+  return out_str
+
 def predict_churn(userList, coreNumber) :
+  def is_changed_something_important_about_the_connection(trace_record_recent, trace_record_previous) :
+    if trace_record_recent[2] != trace_record_previous[2] or\
+        trace_record_recent[8] != trace_record_previous[8]:
+      return False
+    else :
+      return True
+  def connect_to_neighbor_at(examinedTime, lineI, neighbor, whose_state_is_changed) :
+    for lineNeighborI in range(indexOfPotentialNeighbor[neighbor], len(trace[neighbor])):
+      indexOfPotentialNeighbor[neighbor] = lineNeighborI
+      time_to_online_intersection = trace[neighbor][lineNeighborI].time_to_online_intersection_at_time(examinedTime)
+      if int(trace[neighbor][lineNeighborI].traceRecord[1]) == 1 \
+          and trace[neighbor][lineNeighborI].start <= examinedTime < trace[neighbor][lineNeighborI].end :
+        featureVector = make_feature_vector(trace[user][lineI].traceRecord,
+                                            trace[neighbor][lineNeighborI].traceRecord,
+                                            traceAssignment[user], traceAssignment[neighbor], str(lineI),
+                                            str(lineNeighborI))
+        try:
+          if predictions[featureVector] == "1":
+            is_a_new_connection_attempt = True
+            if lineI > 0 and whose_state_is_changed == user:
+              is_a_new_connection_attempt = is_changed_something_important_about_the_connection(trace[user][lineI].traceRecord, trace[user][lineI - 1].traceRecord)
+            if lineNeighborI > 0 and whose_state_is_changed == neighbor :
+              is_a_new_connection_attempt = is_changed_something_important_about_the_connection(trace[neighbor][lineNeighborI].traceRecord,trace[neighbor][lineNeighborI-1].traceRecord)
+            if is_a_new_connection_attempt == True :
+              printingList.append("+"+neighbor)
+            connectedNeighbors[neighbor] = time_to_online_intersection
+            return True
+        except:
+          if featureVector in misssedFeatureVector:
+            misssedFeatureVector[featureVector] += 1
+          else:
+            misssedFeatureVector[featureVector] = 1
+            errorfile.write('' + featureVector + '\n')
+        break
+      elif int(trace[neighbor][lineNeighborI].traceRecord[1]) == 1  and examinedTime < trace[neighbor][lineNeighborI].start :
+        break
+      else:
+        continue
+    return False
+  def connect_to_neighbors_at(examinedTime, lineI, whose_state_is_changed):
+    listOfPotentialNodes = list(range(0, NETWORK_SIZE))
+    while len(connectedNeighbors) < EXPECTED_NUMBER_OF_CONNECTED_NEIGHBOR:
+      if len(listOfPotentialNodes) <= 0:
+        break
+      indexOfRandomNode = random.randrange(len(listOfPotentialNodes))
+      neighbor = str(listOfPotentialNodes[indexOfRandomNode])
+      del listOfPotentialNodes[indexOfRandomNode]
+      if user == neighbor or neighbor in connectedNeighbors:
+        continue
+      if neighbor not in indexOfPotentialNeighbor:
+        indexOfPotentialNeighbor[neighbor] = 0
+      connect_to_neighbor_at(examinedTime, lineI, neighbor, whose_state_is_changed)
+  def reconnect_to_neigbors(examined_time,lineI, whose_state_is_changed) :
+    removeList = []
+    for neighbor in connectedNeighbors :
+      if connect_to_neighbor_at(examined_time,lineI, neighbor, whose_state_is_changed) == False :
+        removeList.append(neighbor)
+    for neighbor in removeList :
+      printingList.append("-" + neighbor)
+      del connectedNeighbors[neighbor]
+  def check_the_connected_neighbor_changes_in_current_session(lineI) :
+    if len(connectedNeighbors) >= 1:
+      expired_neighbor = min(connectedNeighbors.items(), key=operator.itemgetter(1))
+    else:
+      expired_neighbor = ('-', trace[user][lineI].sessionEnd)
+    prev_time = expired_neighbor[1]
+    printingList = []
+    while expired_neighbor[1] < trace[user][lineI].sessionEnd:
+      if prev_time != expired_neighbor[1]:
+        outfile.write(create_print_string_for_churn(prev_time, printingList) + "\n")
+        printingList = []
+      if connect_to_neighbor_at(expired_neighbor[1], lineI, expired_neighbor[0], expired_neighbor[0]) == False:
+        printingList.append("-" + expired_neighbor[0])
+        del connectedNeighbors[expired_neighbor[0]]
+        connect_to_neighbors_at(expired_neighbor[1], lineI, expired_neighbor[0])
+      prev_time = expired_neighbor[1]
+      if len(connectedNeighbors) >= 1:
+        expired_neighbor = min(connectedNeighbors.items(), key=operator.itemgetter(1))
+      else:
+        expired_neighbor = ('-', trace[user][lineI].sessionEnd)
+
   fileName = str(coreNumber) + ".csv"
   errorfile = open('' + ERRFILE_PATH + fileName, "w", encoding="utf-8")
   misssedFeatureVector = {}
   for user in userList :
-    potentialNeighborIndex = {} #TODO nevezd át "potential"ra
-    connectedNeighbors = {}
-    for lineI in range (0,len(trace[user])-1) :
-      if int(trace[user][lineI][1]) == 1:
-        sessionStartUser = get_day_time(int(trace[user][lineI][0]))
-        if int(trace[user][lineI + 1][1]) == -1:
-          sessionEndUser = 1000 * 60 * 60 * 24
-        else:
-          sessionEndUser = get_day_time(int(trace[user][lineI + 1][0]))
-        # 1) FROM sessionStartUser
-        #TODO itt kell végignézni, hogy minden connectedNeighbors beli elemnek folytatódik-e a sessiönje?
-        for neighbor in connectedNeighbors :
-          for lineNeighborI in range(potentialNeighborIndex[neighbor],len(trace[neighbor])-1) :
-            potentialNeighborIndex[neighbor] = lineNeighborI
-            sessionStartNeighbor = get_day_time(int(trace[neighbor][lineNeighborI][0]))
-            if int(trace[neighbor][lineNeighborI + 1][1]) == -1:
-              sessionEndNeighbor = 1000 * 60 * 60 * 24
-            else:
-              sessionEndNeighbor = get_day_time(int(trace[neighbor][lineNeighborI + 1][0]))
-            if sessionStartNeighbor <= sessionStartUser < sessionEndNeighbor and \
-               int(trace[neighbor][lineNeighborI][1]) == 1:
-              featureVector = make_feature_vector(trace[user][lineI], trace[neighbor][lineNeighborI],
-                                                  traceAssignment[user], traceAssignment[neighbor], str(lineI),
-                                                  str(lineNeighborI))
-              try:
-                if predictions[featureVector] == "1":
-        # get new neighbor up to EXPECTED_NUMBER_OF_CONNECTED_NEIGHBOR
-        listOfPotentialNodes = list(range(0, NETWORK_SIZE))
-        while len(connectedNeighbors) < EXPECTED_NUMBER_OF_CONNECTED_NEIGHBOR:
-          indexOfRandomNode = random.randrange(len(listOfPotentialNodes))
-          neighbor = str(listOfPotentialNodes[indexOfRandomNode])
-          del listOfPotentialNodes[indexOfRandomNode]
-          if len(listOfPotentialNodes) <= 0:
-            break
-          if user == neighbor or neighbor in connectedNeighbors:
-            continue
-          if neighbor not in potentialNeighborIndex:
-            potentialNeighborIndex[neighbor] = 0
-          for lineNeighborI in range(potentialNeighborIndex[neighbor], len(trace[neighbor]) - 1):
-            potentialNeighborIndex[neighbor] = lineNeighborI
-            sessionStartNeighbor = get_day_time(int(trace[neighbor][lineNeighborI][0]))
-            if int(trace[neighbor][lineNeighborI + 1][1]) == -1:
-              sessionEndNeighbor = 1000 * 60 * 60 * 24
-            else:
-              sessionEndNeighbor = get_day_time(int(trace[neighbor][lineNeighborI + 1][0]))
-            if sessionStartNeighbor <= sessionStartUser < sessionEndNeighbor and \
-                int(trace[neighbor][lineNeighborI][1]) == 1:
-              featureVector = make_feature_vector(trace[user][lineI], trace[neighbor][lineNeighborI],
-                                                  traceAssignment[user], traceAssignment[neighbor], str(lineI),
-                                                  str(lineNeighborI))
-              try:
-                if predictions[featureVector] == "1":
-                  connectedNeighbors[neighbor] = sessionStartNeighbor
-              except:
-                if featureVector in misssedFeatureVector:
-                  misssedFeatureVector[featureVector] += 1
-                else:
-                  misssedFeatureVector[featureVector] = 1
-                  errorfile.write('' + featureVector + '\n')
-              break
-            if sessionStartUser < sessionStartNeighbor:
-              break
-        # 2) TO sessionEndUser
-        #TODO itt kell végignézni, hogy minden connectedNeighbors beli elemnek folytatódik-e a sessiönje?
-
+    fileName = str(user) + ".csv"
+    outfile = open('' + OUTFILE_PATH + fileName, "w", encoding="utf-8")
+    indexOfPotentialNeighbor = {}
+    for lineI in range (0,len(trace[user])) :
+      if int(trace[user][lineI].traceRecord[1]) != 1:
+        connectedNeighbors = {}
+      else :
+        examined_time = trace[user][lineI].sessionStart
+        printingList = []
+        if lineI == 0 or int(trace[user][lineI-1].traceRecord[1]) != 1  :
+          connectedNeighbors = {}
+        else :
+          reconnect_to_neigbors(examined_time,lineI,user)
+        connect_to_neighbors_at(examined_time,lineI,user)
+        outfile.write(create_print_string_for_churn(examined_time,printingList)+"\n")
+        check_the_connected_neighbor_changes_in_current_session(lineI)
+    outfile.close()
 
   errorfile.close()
 
